@@ -256,9 +256,6 @@
           <div class="grid w-full max-h-[80px] gap-1 grid-cols-10 overflow-y-auto">
             {#each mobHpData
               .filter((mob) => {
-                if (mob.hp_percent == 100 && mob.server_id < 20) { 
-                  return false;
-                }
                 if(currentLineId === mob.server_id) {
                   return true;
                 }

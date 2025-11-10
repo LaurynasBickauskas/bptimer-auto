@@ -152,7 +152,7 @@ pub fn get_local_player_line(state: tauri::State<'_, EncounterMutex>) -> Result<
 pub async fn mark_current_crowdsourced_line_dead(
     encounter_state: tauri::State<'_, EncounterMutex>,
 ) -> Result<(), String> {
-    let (monster_id, monster_name, remote_id, line, pos_x, pos_y) = {
+    let (monster_id, monster_name, line, pos_x, pos_y) = {
         let encounter = encounter_state
             .lock()
             .map_err(|_| "Failed to lock encounter".to_string())?;
@@ -165,11 +165,6 @@ pub async fn mark_current_crowdsourced_line_dead(
             .crowdsource_monster_name
             .clone()
             .unwrap_or_else(|| "Unknown Monster".to_string());
-
-        let remote_id = encounter
-            .crowdsource_monster_remote_id
-            .clone()
-            .ok_or_else(|| "No crowdsourced monster remote ID available".to_string())?;
 
         let scene_data = encounter
             .local_player
@@ -195,7 +190,7 @@ pub async fn mark_current_crowdsourced_line_dead(
             .y
             .ok_or_else(|| "No pos_y available for local player".to_string())? as f64;
 
-        (monster_id, monster_name, remote_id, line, pos_x, pos_y)
+        (monster_id, monster_name, line, pos_x, pos_y)
     };
 
     info!(
@@ -239,8 +234,6 @@ pub fn get_header_info(state: tauri::State<'_, EncounterMutex>) -> Result<Header
     }
 
     let time_elapsed_ms = encounter.time_last_combat_packet_ms - encounter.time_fight_start_ms;
-    #[allow(clippy::cast_precision_loss)]
-    let time_elapsed_secs = time_elapsed_ms as f64 / 1000.0;
 
     let encounter_stats = &encounter.dmg_stats;
 

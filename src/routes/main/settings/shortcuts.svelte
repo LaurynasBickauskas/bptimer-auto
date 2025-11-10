@@ -63,7 +63,6 @@
       return;
     }
 
-    // Non-modifier key: set/replace the main key
     mainKey = k;
   }
 
@@ -71,18 +70,15 @@
     e.preventDefault();
     const k = normalizeKey(e.key);
 
-    // If a modifier was released, just reflect that (remove it) but don't finalize yet
     if (MODIFIERS.has(k)) {
       activeMods.delete(k);
       stopEdit();
       return;
     }
 
-    // Only finalize when the non-modifier (main) key is released
     if (mainKey) {
       const shortcutKey = currentShortcutString();
 
-      // Ensure we actually have a main key (defensive)
       const hasMain = !!mainKey;
       if (!hasMain) return;
 

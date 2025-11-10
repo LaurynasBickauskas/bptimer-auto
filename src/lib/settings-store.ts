@@ -19,7 +19,6 @@ const DEFAULT_SETTINGS = {
     markCurrentMonsterDead: "",
   },
   integration: {
-    bptimer: true,
     bptimerUI: true,
   }
 };

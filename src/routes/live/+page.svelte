@@ -443,8 +443,10 @@
 
     if (event.eventType === "mob_hp_updates" && event.data) {
       try {
-        const update = parseMobHpUpdate(event.data);
-        upsertMobEntry(update.remote_id, update.server_id, update.hp_percent);
+        const updates = parseMobHpUpdate(event.data);
+        for (const update of updates) {
+          upsertMobEntry(update.remote_id, update.server_id, update.hp_percent);
+        }
       } catch (error) {
         console.error("live/+page:handleSseEvent mob_hp_updates", { error, payload: event.data });
       }
@@ -483,28 +485,37 @@
     }
   }
 
-  function parseMobHpUpdate(raw: string): MobHpUpdate {
+  function parseMobHpUpdate(raw: string): MobHpUpdate[] {
     const parsed = JSON.parse(raw);
-    if (!Array.isArray(parsed) || parsed.length < 3) {
+
+    if (!Array.isArray(parsed)) {
       throw new Error("Unexpected mob_hp_updates payload format");
     }
 
-    const [remoteId, serverId, hpPercent] = parsed;
-    if (typeof remoteId !== "string") {
-      throw new Error("mob_hp_updates payload missing remote id");
-    }
-    if (typeof serverId !== "number") {
-      throw new Error("mob_hp_updates payload missing server id");
-    }
-    if (typeof hpPercent !== "number") {
-      throw new Error("mob_hp_updates payload missing hp percent");
-    }
+    const records = parsed.length > 0 && Array.isArray(parsed[0]) ? parsed : [parsed];
 
-    return {
-      remote_id: remoteId,
-      server_id: serverId,
-      hp_percent: clampPercent(hpPercent),
-    };
+    return records.map((record) => {
+      if (!Array.isArray(record) || record.length < 3) {
+        throw new Error("Unexpected mob_hp_updates payload format");
+      }
+
+      const [remoteId, serverId, hpPercent] = record;
+      if (typeof remoteId !== "string") {
+        throw new Error("mob_hp_updates payload missing remote id");
+      }
+      if (typeof serverId !== "number") {
+        throw new Error("mob_hp_updates payload missing server id");
+      }
+      if (typeof hpPercent !== "number") {
+        throw new Error("mob_hp_updates payload missing hp percent");
+      }
+
+      return {
+        remote_id: remoteId,
+        server_id: serverId,
+        hp_percent: clampPercent(hpPercent),
+      };
+    });
   }
 
   function delay(ms: number, signal: AbortSignal) {

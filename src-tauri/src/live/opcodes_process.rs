@@ -2,8 +2,8 @@ use crate::live::bptimer_stream::{
     BPTIMER_BASE_URL, CREATE_HP_REPORT_ENDPOINT, CROWD_SOURCE_API_KEY,
 };
 use crate::live::opcodes_models::{
-    attr_type, CombatStats, Encounter, Entity, MONSTER_NAMES, MONSTER_NAMES_BOSS,
-    MONSTER_NAMES_CROWDSOURCE, MONSTER_UID_CROWDSOURCE_MAP,
+    attr_type, Encounter, Entity, MONSTER_NAMES, MONSTER_NAMES_CROWDSOURCE,
+    MONSTER_UID_CROWDSOURCE_MAP,
 };
 use crate::packets::utils::BinaryReader;
 use blueprotobuf_lib::blueprotobuf;
@@ -19,7 +19,6 @@ pub fn on_server_change(encounter: &mut Encounter) {
 pub fn process_sync_near_entities(
     encounter: &mut Encounter,
     sync_near_entities: blueprotobuf::SyncNearEntities,
-    is_bptimer_enabled: bool,
 ) -> Option<()> {
     for pkt_entity in sync_near_entities.appear {
         let target_uuid = pkt_entity.uuid?;
@@ -34,7 +33,7 @@ pub fn process_sync_near_entities(
 
         match target_entity_type {
             blueprotobuf::EEntityType::EntChar => process_player_attrs(target_entity, target_uid, pkt_entity.attrs?.attrs),
-            blueprotobuf::EEntityType::EntMonster => process_monster_attrs(target_entity, pkt_entity.attrs?.attrs, encounter.local_player.as_ref(), is_bptimer_enabled),
+            blueprotobuf::EEntityType::EntMonster => process_monster_attrs(target_entity, pkt_entity.attrs?.attrs, encounter.local_player.as_ref()),
             _ => {}
         }
     }
@@ -61,18 +60,16 @@ pub fn process_sync_container_data(
 pub fn process_sync_to_me_delta_info(
     encounter: &mut Encounter,
     sync_to_me_delta_info: blueprotobuf::SyncToMeDeltaInfo,
-    is_bptimer_enabled: bool,
 ) -> Option<()> {
     let delta_info = sync_to_me_delta_info.delta_info?;
     encounter.local_player_uid = Some(delta_info.uuid? >> 16);
-    process_aoi_sync_delta(encounter, delta_info.base_delta?, is_bptimer_enabled);
+    process_aoi_sync_delta(encounter, delta_info.base_delta?);
     Some(())
 }
 
 pub fn process_aoi_sync_delta(
     encounter: &mut Encounter,
     aoi_sync_delta: blueprotobuf::AoiSyncDelta,
-    is_bptimer_enabled: bool,
 ) -> Option<()> {
     let target_uuid = aoi_sync_delta.uuid?;
     let target_uid = target_uuid >> 16;
@@ -90,7 +87,7 @@ pub fn process_aoi_sync_delta(
         if let Some(attrs_collection) = aoi_sync_delta.attrs {
             match target_entity_type {
                 blueprotobuf::EEntityType::EntChar => process_player_attrs(target_entity, target_uid, attrs_collection.attrs),
-                blueprotobuf::EEntityType::EntMonster => process_monster_attrs(target_entity, attrs_collection.attrs, encounter.local_player.as_ref(), is_bptimer_enabled),
+                blueprotobuf::EEntityType::EntMonster => process_monster_attrs(target_entity, attrs_collection.attrs, encounter.local_player.as_ref()),
                 _ => {}
             }
         }
@@ -100,11 +97,11 @@ pub fn process_aoi_sync_delta(
         return Some(()); 
     };
 
-    for sync_damage_info in skill_effect.damages {
+    for _ in skill_effect.damages {
         let target_entity = encounter.entity_uid_to_entity.get(&target_uid);
+        info!("target_entity: {target_entity:?}");
         let monster_id = target_entity.and_then(|e| e.monster_id);
-        let is_boss = monster_id
-            .is_some_and(|id| MONSTER_NAMES_BOSS.contains_key(&id));
+        info!("monster_id: {monster_id:?}");
         let is_crowdsource = monster_id
             .is_some_and(|id| MONSTER_NAMES_CROWDSOURCE.contains_key(&id));
         let crowdsource_name = if is_crowdsource {
@@ -117,19 +114,7 @@ pub fn process_aoi_sync_delta(
         };
         let crowdsource_remote_id = monster_id
             .and_then(|id| MONSTER_UID_CROWDSOURCE_MAP.get(&id).cloned());
-        let attacker_uuid = sync_damage_info
-            .top_summoner_id
-            .or(sync_damage_info.attacker_uuid)?;
-        let attacker_uid = attacker_uuid >> 16;
-        let attacker_entity = encounter.entity_uid_to_entity
-                                       .entry(attacker_uid)
-                                       .or_insert_with(|| Entity {
-                                           entity_type: blueprotobuf::EEntityType::from(attacker_uuid),
-                                           ..Default::default()
-                                       });
 
-        let skill_uid = sync_damage_info.owner_id?;
-        let is_heal = sync_damage_info.r#type.unwrap_or(0) == blueprotobuf::EDamageType::Heal as i32;
         if is_crowdsource {
             if crowdsource_remote_id.is_none() {
                 warn!(
@@ -153,27 +138,6 @@ pub fn process_aoi_sync_delta(
     Some(())
 }
 
-fn process_stats(sync_damage_info: &blueprotobuf::SyncDamageInfo, stats: &mut CombatStats) {
-    const CRIT_BIT: i32 = 0b00_00_00_01;
-
-    let non_lucky_dmg = sync_damage_info.value;
-    let lucky_value = sync_damage_info.lucky_value;
-    let actual_value = non_lucky_dmg.or(lucky_value).unwrap_or(0);
-
-    let is_lucky = lucky_value.is_some();
-    let flag = sync_damage_info.type_flag.unwrap_or_default();
-    let is_crit = (flag & CRIT_BIT) != 0;
-    if is_crit {
-        stats.crit_hits += 1;
-        stats.crit_value += actual_value;
-    }
-    if is_lucky {
-        stats.lucky_hits += 1;
-        stats.lucky_value += actual_value;
-    }
-    stats.hits += 1;
-    stats.value += actual_value;
-}
 
 fn process_player_attrs(player_entity: &mut Entity, player_uid: i64, attrs: Vec<blueprotobuf::Attr>) {
     for attr in attrs {
@@ -202,7 +166,6 @@ fn process_monster_attrs(
     monster_entity: &mut Entity,
     attrs: Vec<blueprotobuf::Attr>,
     local_player: Option<&blueprotobuf::SyncContainerData>,
-    is_bptimer_enabled: bool,
 ) {
     for attr in attrs {
         let Some(raw_bytes) = attr.raw_data else { continue; };
@@ -216,64 +179,62 @@ fn process_monster_attrs(
                 let prev_hp_opt = monster_entity.curr_hp;
                 monster_entity.curr_hp = Some(curr_hp);
 
-                if is_bptimer_enabled {
-                    let endpoint = format!("{BPTIMER_BASE_URL}{CREATE_HP_REPORT_ENDPOINT}");
-                    let (Some(monster_id), Some(local_player)) = (monster_entity.monster_id, &local_player) else {
+                let endpoint = format!("{BPTIMER_BASE_URL}{CREATE_HP_REPORT_ENDPOINT}");
+                let (Some(monster_id), Some(local_player)) = (monster_entity.monster_id, &local_player) else {
+                    continue;
+                };
+                let Some(max_hp) = monster_entity.max_hp else {
+                    continue;
+                };
+                if MONSTER_NAMES_CROWDSOURCE.contains_key(&monster_id) { // only record if it's a world boss, magical creature, etc.
+                    let monster_name = MONSTER_NAMES.get(&monster_id).map_or("Unknown Monster Name", |s| s.as_str());
+                    let new_hp_pct = (curr_hp * 100 / max_hp).clamp(0, 100);
+                    let old_hp_pct_opt =
+                        prev_hp_opt.map(|prev_hp| (prev_hp * 100 / max_hp).clamp(0, 100));
+                    let Some((Some(line), Some(pos_x), Some(pos_y))) = local_player.v_data.as_ref()
+                                                                               .and_then(|v| v.scene_data.as_ref())
+                                                                               .map(|s| (
+                                                                                   s.line_id,
+                                                                                   s.pos.as_ref().and_then(|p| p.x),
+                                                                                   s.pos.as_ref().and_then(|p| p.y),
+                                                                               ))
+                    else {
                         continue;
                     };
-                    let Some(max_hp) = monster_entity.max_hp else {
-                        continue;
+
+                    let should_report = match old_hp_pct_opt {
+                        None => true,
+                        Some(old_hp_pct) => old_hp_pct != new_hp_pct && new_hp_pct % 5 == 0,
                     };
-                    if MONSTER_NAMES_CROWDSOURCE.contains_key(&monster_id) { // only record if it's a world boss, magical creature, etc.
-                        let monster_name = MONSTER_NAMES.get(&monster_id).map_or("Unknown Monster Name", |s| s.as_str());
-                        let new_hp_pct = (curr_hp * 100 / max_hp).clamp(0, 100);
-                        let old_hp_pct_opt =
-                            prev_hp_opt.map(|prev_hp| (prev_hp * 100 / max_hp).clamp(0, 100));
-                        let Some((Some(line), Some(pos_x), Some(pos_y))) = local_player.v_data.as_ref()
-                                                                                       .and_then(|v| v.scene_data.as_ref())
-                                                                                       .map(|s| (
-                                                                                           s.line_id,
-                                                                                           s.pos.as_ref().and_then(|p| p.x),
-                                                                                           s.pos.as_ref().and_then(|p| p.y),
-                                                                                       ))
-                        else {
-                            continue;
-                        };
 
-                        let should_report = match old_hp_pct_opt {
-                            None => true,
-                            Some(old_hp_pct) => old_hp_pct != new_hp_pct && new_hp_pct % 5 == 0,
-                        };
-
-                        if should_report {
-                            info!("Found crowdsourced monster with Name {monster_name} - ID {monster_id} - HP% {new_hp_pct}% on line {line} and pos ({pos_x},{pos_y})");
-                            let body = serde_json::json!({
-                                    "monster_id": monster_id,
-                                    "hp_pct": new_hp_pct,
-                                    "line": line,
-                                    "pos_x": pos_x,
-                                    "pos_y": pos_y,
-                                });
-                            tokio::spawn(async move {
-                                let endpoint = endpoint.clone();
-                                let client = reqwest::Client::new();
-                                let res = client
-                                    .post(endpoint)
-                                    .header("X-API-Key", CROWD_SOURCE_API_KEY)
-                                    .json(&body)
-                                    .send().await;
-                                match res {
-                                    Ok(resp) => {
-                                        if resp.status() != reqwest::StatusCode::OK {
-                                            error!("POST monster info failed: status {}", resp.status());
-                                        }
-                                    }
-                                    Err(e) => {
-                                        error!("Failed to POST monster info: {e}");
+                    if should_report {
+                        info!("Found crowdsourced monster with Name {monster_name} - ID {monster_id} - HP% {new_hp_pct}% on line {line} and pos ({pos_x},{pos_y})");
+                        let body = serde_json::json!({
+                            "monster_id": monster_id,
+                            "hp_pct": new_hp_pct,
+                            "line": line,
+                            "pos_x": pos_x,
+                            "pos_y": pos_y,
+                        });
+                        tokio::spawn(async move {
+                            let endpoint = endpoint.clone();
+                            let client = reqwest::Client::new();
+                            let res = client
+                                .post(endpoint)
+                                .header("X-API-Key", CROWD_SOURCE_API_KEY)
+                                .json(&body)
+                                .send().await;
+                            match res {
+                                Ok(resp) => {
+                                    if resp.status() != reqwest::StatusCode::OK {
+                                        error!("POST monster info failed: status {}", resp.status());
                                     }
                                 }
-                            });
-                        }
+                                Err(e) => {
+                                    error!("Failed to POST monster info: {e}");
+                                }
+                            }
+                        });
                     }
                 }
             }

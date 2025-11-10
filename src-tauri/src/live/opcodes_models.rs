@@ -13,8 +13,6 @@ pub struct Encounter {
     pub local_player_uid: Option<i64>,
     pub entity_uid_to_entity: HashMap<i64, Entity>,
     pub dmg_stats: CombatStats,
-    pub dmg_stats_boss_only: CombatStats,
-    pub heal_stats: CombatStats,
     pub local_player: Option<SyncContainerData>,
     pub crowdsource_monster_name: Option<String>,
     pub crowdsource_monster_id: Option<i32>,
@@ -24,16 +22,6 @@ pub struct Encounter {
 #[derive(Debug, Default, Clone)]
 pub struct Entity {
     pub entity_type: EEntityType,
-
-    pub dmg_stats: CombatStats,
-    pub skill_uid_to_dps_stats: HashMap<i32, CombatStats>,
-
-    pub dmg_stats_boss_only: CombatStats,
-    pub skill_uid_to_dps_stats_boss_only: HashMap<i32, CombatStats>,
-
-    pub heal_stats: CombatStats,
-    pub skill_uid_to_heal_stats: HashMap<i32, CombatStats>,
-
     pub name: Option<String>, 
     pub monster_id: Option<i32>,
     pub curr_hp: Option<i32>, 
@@ -43,34 +31,10 @@ pub struct Entity {
 #[derive(Debug, Default, Clone)]
 pub struct CombatStats {
     pub value: i64,
-    pub hits: i64,
-    pub crit_value: i64,
-    pub crit_hits: i64,
-    pub lucky_value: i64,
-    pub lucky_hits: i64,
-}
-
-static SKILL_NAMES: Lazy<HashMap<i32, String>> = Lazy::new(|| {
-    let data = include_str!("../../../src/lib/data/json/SkillName.json");
-    serde_json::from_str(data).expect("invalid SkillName.json")
-});
-
-impl CombatStats {
-    pub fn get_skill_name(skill_uid: i32) -> String {
-        SKILL_NAMES
-            .get(&skill_uid)
-            .cloned()
-            .unwrap_or_else(|| format!("UNKNOWN SKILL ({skill_uid})"))
-    }
 }
 
 pub static MONSTER_NAMES: Lazy<HashMap<i32, String>> = Lazy::new(|| {
     let data = include_str!("../../../src/lib/data/json/MonsterName.json");
-    serde_json::from_str(data).expect("invalid MonsterName.json")
-});
-
-pub static MONSTER_NAMES_BOSS: Lazy<HashMap<i32, String>> = Lazy::new(|| {
-    let data = include_str!("../../../src/lib/data/json/MonsterNameBoss.json");
     serde_json::from_str(data).expect("invalid MonsterName.json")
 });
 
