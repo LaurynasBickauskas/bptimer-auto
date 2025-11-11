@@ -34,7 +34,6 @@ pub fn run() {
         .commands(collect_commands![
             live::commands::enable_blur,
             live::commands::disable_blur,
-            live::commands::copy_sync_container_data,
             live::commands::get_header_info,
             live::commands::get_last_hit_boss_name,
             live::commands::get_crowdsourced_monster,

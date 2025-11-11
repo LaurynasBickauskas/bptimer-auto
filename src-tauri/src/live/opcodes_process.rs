@@ -114,7 +114,6 @@ pub fn process_aoi_sync_delta(
             .and_then(|id| MONSTER_UID_CROWDSOURCE_MAP.get(&id).cloned());
 
         if is_crowdsource {
-            info!("is_crowdsource monster_id: {monster_id:?}");
 
             if crowdsource_remote_id.is_none() {
                 warn!(

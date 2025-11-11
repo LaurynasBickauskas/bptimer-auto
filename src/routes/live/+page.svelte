@@ -52,6 +52,9 @@
   let selectedRemoteId: string | null = $state(null);
   let mobHpData: MobHpData[] = $state([]);
   let currentLineId: number | null = $state(null);
+  let isMonsterDropdownOpen = $state(false);
+  let dropdownContainer: HTMLDivElement | null = null;
+  let selectedMonsterOption: CrowdsourcedMonsterOption | null = $state(null);
 
   type HpChangeRecord = { hp: number; timestamp: number };
 
@@ -70,6 +73,60 @@
 
   let seedNonce = 0;
   const textDecoder = new TextDecoder();
+
+  function monsterImageSrc(monsterName: string) {
+    const slug = monsterName.toLowerCase().replace(/\s+/g, "_");
+    return `https://bptimer.com/images/bosses/${slug}.webp`;
+  }
+
+  function toggleMonsterDropdown() {
+    if (monsterOptions.length === 0) {
+      return;
+    }
+    isMonsterDropdownOpen = !isMonsterDropdownOpen;
+  }
+
+  function closeMonsterDropdown() {
+    isMonsterDropdownOpen = false;
+  }
+
+  function selectMonster(option: CrowdsourcedMonsterOption) {
+    closeMonsterDropdown();
+    void handleMonsterSelect(option.remote_id);
+  }
+
+  function handleDropdownButtonKeydown(event: KeyboardEvent) {
+    if (event.key === "ArrowDown" || event.key === "Enter" || event.key === " ") {
+      event.preventDefault();
+      if (monsterOptions.length === 0) {
+        return;
+      }
+      isMonsterDropdownOpen = true;
+    } else if (event.key === "Escape") {
+      closeMonsterDropdown();
+    }
+  }
+
+  function handleDocumentClick(event: MouseEvent) {
+    if (!isMonsterDropdownOpen) {
+      return;
+    }
+    if (!dropdownContainer) {
+      return;
+    }
+    const target = event.target as Node | null;
+    if (target && dropdownContainer.contains(target)) {
+      return;
+    }
+    closeMonsterDropdown();
+  }
+
+  $effect(() => {
+    selectedMonsterOption =
+      selectedRemoteId && monsterOptions.length > 0
+        ? monsterOptions.find((option) => option.remote_id === selectedRemoteId) ?? null
+        : null;
+  });
 
   function mobKey(entry: MobHpData) {
     return `${entry.remote_id}:${entry.server_id}`;
@@ -609,6 +666,7 @@
     setStreamActive(true);
     void loadMonsterOptions();
     void fetchData();
+    document.addEventListener("click", handleDocumentClick);
 
     fetchInterval = setInterval(fetchData, 500);
     reseedInterval = setInterval(() => {
@@ -632,62 +690,133 @@
       mobHpLastChange.clear();
       mobHpData = [];
       activeRemoteId = null;
+      dropdownContainer = null;
+      closeMonsterDropdown();
+      document.removeEventListener("click", handleDocumentClick);
     };
   });
 </script>
 
-<div class="flex h-full w-full flex-col justify-start gap-2 p-1">
-    {#if currentMonster}
-      <div class="flex w-full flex-col gap-2">
-        {#if mobHpData.length > 0}
-          <div class="grid w-full max-h-[80px] gap-2 grid-cols-10 overflow-y-auto">
-            {#each mobHpData
-              .filter((mob) => {
-
-                if(currentLineId === mob.server_id) {
-                  return true;
-                }
-                return mob.hp_percent > 0;
-              })
-              .sort((a, b) => a.hp_percent - b.hp_percent ||  b.server_id - a.server_id ) as mob}
-              <div class={`relative overflow-hidden rounded-md border ${currentLineId === mob.server_id ? "border-primary/80 ring-2 ring-primary/30" : "border-neutral-700"} bg-neutral-900/60 p-2 text-center text-xs`}>
-                <div
-                  class={`absolute inset-y-0 left-0 ${barClass(mob.hp_percent)} transition-all duration-200`}
-                  style={`width: ${clampPercent(mob.hp_percent)}%;`}
-                ></div>
-                <div class="relative z-10 flex flex-col items-center gap-0.5">
-                  <span class="font-medium text-neutral-200">{mob.server_id}</span>
-                  {#if currentLineId === mob.server_id}
-                    <span class="rounded bg-primary/20 px-1 text-[0.65rem] uppercase tracking-wide text-primary"></span>
-                  {/if}
-                </div>
+<div class="flex h-full w-full flex-col gap-2 p-2">
+    <div class="flex w-full flex-col gap-1 md:w-1/2 lg:w-1/3" bind:this={dropdownContainer}>
+      <div class="relative">
+        <button
+          type="button"
+          class="flex w-full items-center justify-between gap-2 rounded-md border border-neutral-700 bg-neutral-900/60 px-3 py-2 text-sm text-neutral-200 outline-none transition-all focus:border-neutral-500 focus:ring-2 focus:ring-primary/40 disabled:cursor-not-allowed disabled:opacity-60"
+          on:click={toggleMonsterDropdown}
+          on:keydown={handleDropdownButtonKeydown}
+          aria-haspopup="listbox"
+          aria-expanded={isMonsterDropdownOpen}
+          disabled={monsterOptions.length === 0}
+        >
+          {#if selectedMonsterOption}
+            <span class="flex flex-1 items-center gap-2 truncate">
+              <img
+                src={monsterImageSrc(selectedMonsterOption.name)}
+                alt={`${selectedMonsterOption.name} icon`}
+                class="h-7 w-7 shrink-0 rounded-full object-cover"
+                loading="lazy"
+              />
+              <span class="truncate">{selectedMonsterOption.name}</span>
+            </span>
+          {:else}
+            <span class="flex flex-1 items-center gap-2 truncate text-neutral-500">
+              {monsterOptions.length > 0 ? "Select monster" : "Loading monsters..."}
+            </span>
+          {/if}
+          <svg
+            class={`h-4 w-4 shrink-0 transition-transform ${isMonsterDropdownOpen ? "rotate-180" : ""}`}
+            viewBox="0 0 16 16"
+            aria-hidden="true"
+          >
+            <path
+              fill="currentColor"
+              d="M3.22 5.47a.75.75 0 0 1 1.06 0L8 9.19l3.72-3.72a.75.75 0 1 1 1.06 1.06l-4.25 4.25a.75.75 0 0 1-1.06 0L3.22 6.53a.75.75 0 0 1 0-1.06Z"
+            />
+          </svg>
+        </button>
+        {#if isMonsterDropdownOpen}
+          <div
+            class="absolute inset-x-0 z-20 mt-2 max-h-72 rounded-md border border-neutral-700 bg-neutral-900/95 shadow-2xl backdrop-blur transition duration-150"
+            role="listbox"
+          >
+            {#if monsterOptions.length === 0}
+              <div class="px-3 py-4 text-center text-sm text-neutral-500">
+                Loading monsters...
               </div>
-            {/each}
+            {:else}
+              <div class="max-h-72 overflow-y-auto py-1">
+                {#each monsterOptions as option (option.remote_id)}
+                  <button
+                    type="button"
+                    class={`flex w-full items-center gap-3 px-3 py-2 text-left text-sm transition-colors hover:bg-neutral-800/80 ${selectedRemoteId === option.remote_id ? "bg-neutral-800/70" : ""}`}
+                    role="option"
+                    aria-selected={selectedRemoteId === option.remote_id}
+                    on:click={() => selectMonster(option)}
+                  >
+                    <img
+                      src={monsterImageSrc(option.name)}
+                      alt={`${option.name} icon`}
+                      class="h-8 w-8 shrink-0 rounded-full object-cover"
+                      loading="lazy"
+                    />
+                    <span class="flex-1 truncate text-neutral-200">{option.name}</span>
+                    {#if selectedRemoteId === option.remote_id}
+                      <span class="text-xs uppercase tracking-wide text-primary">Active</span>
+                    {/if}
+                  </button>
+                {/each}
+              </div>
+            {/if}
           </div>
-        {:else}
-          <p class="text-xs text-neutral-600">No HP data available</p>
         {/if}
       </div>
-    {:else}
-      <p class="text-sm text-neutral-500">No timed monster found, select a monster to track:</p>
-    {/if}
-    <div class="flex w-full flex-col gap-1 md:w-1/2 lg:w-1/3">
-      <select
-        id="monster-select"
-        class="w-full rounded-md border border-neutral-700 bg-neutral-900/60 px-2 py-1 text-sm text-neutral-200 outline-none transition-colors focus:border-neutral-500"
-        disabled={monsterOptions.length === 0}
-        value={selectedRemoteId ?? ""}
-        onchange={(event) => handleMonsterSelect((event.currentTarget as HTMLSelectElement).value)}
-      >
-        <option value="" disabled selected={!selectedRemoteId}>
-          {monsterOptions.length > 0 ? "Select monster" : "Loading monsters..."}
-        </option>
-        {#each monsterOptions as option}
-          <option value={option.remote_id}>
-            {option.name}
-          </option>
-        {/each}
-      </select>
+    </div>
+    <div class="flex flex-1 flex-col gap-2 overflow-hidden">
+      {#if currentMonster}
+        <div class="flex flex-1 flex-col gap-2 overflow-hidden">
+          {#if mobHpData.length > 0}
+            <div class="flex-1 overflow-y-auto pr-1">
+              <div class="grid w-full gap-1 grid-cols-10">
+                {#each mobHpData
+                  .filter((mob) => {
+
+                    if(currentLineId === mob.server_id) {
+                      return true;
+                    }
+                    return mob.hp_percent > 0;
+                  })
+                  .sort((a, b) => { 
+                    if(currentLineId === a.server_id) { 
+                      return -1; 
+                    }  
+                    if(currentLineId === b.server_id) { 
+                      return 1; 
+                    }  
+                    return a.hp_percent - b.hp_percent ||  b.server_id - a.server_id;
+                  }) as mob}
+                  <div class={`relative overflow-hidden rounded-md border ${currentLineId === mob.server_id ? "border-primary/80 ring-2 ring-primary/30" : "border-neutral-700"} bg-neutral-900/60 p-2 text-center text-xs`}>
+                    <div
+                      class={`absolute inset-y-0 left-0 ${barClass(mob.hp_percent)} transition-all duration-200`}
+                      style={`width: ${clampPercent(mob.hp_percent)}%;`}
+                    ></div>
+                    <div class="relative z-10 flex flex-col items-center gap-0.5">
+                      <span class="font-medium text-neutral-200">{mob.server_id}</span>
+                      {#if currentLineId === mob.server_id}
+                        <span class="rounded bg-primary/20 px-1 text-[0.65rem] uppercase tracking-wide text-primary"></span>
+                      {/if}
+                    </div>
+                  </div>
+                {/each}
+              </div>
+            </div>
+          {:else}
+            <p class="text-xs text-neutral-600">No HP data available</p>
+          {/if}
+        </div>
+      {:else}
+        <p class="text-sm text-neutral-500">No timed monster found, select a monster to track:</p>
+      {/if}
     </div>
 </div>
 

@@ -11,7 +11,6 @@ use reqwest::Client;
 use serde::Serialize;
 use specta::Type;
 use tauri::Manager;
-use tauri_plugin_clipboard_manager::ClipboardExt;
 use window_vibrancy::{apply_blur, clear_blur};
 
 #[tauri::command]
@@ -27,19 +26,6 @@ pub fn enable_blur(app: tauri::AppHandle) {
 pub fn disable_blur(app: tauri::AppHandle) {
     if let Some(meter_window) = app.get_webview_window(WINDOW_LIVE_LABEL) {
         clear_blur(&meter_window).ok();
-    }
-}
-
-#[tauri::command]
-#[specta::specta]
-pub fn copy_sync_container_data(app: tauri::AppHandle) {
-    let state = app.state::<EncounterMutex>();
-    let encounter = state.lock().unwrap();
-    if let Some(local_player) = &encounter.local_player
-        && let Ok(json) = serde_json::to_string_pretty(local_player)
-        && app.clipboard().write_text(json).is_err()
-    {
-        info!("No SyncContainerData found. Nothing copied to the clipboard.");
     }
 }
 

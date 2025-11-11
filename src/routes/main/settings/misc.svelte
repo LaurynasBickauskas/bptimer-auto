@@ -1,5 +1,4 @@
 <script lang="ts">
-  import { commands } from "$lib/bindings";
   import * as Tabs from "$lib/components/ui/tabs/index.js";
   import SettingsButton from "./settings-button.svelte";
   import { openPath, revealItemInDir } from '@tauri-apps/plugin-opener';
@@ -9,9 +8,6 @@
 </script>
 
 <Tabs.Content value={SETTINGS_CATEGORY}>
-  <SettingsButton onclick={commands.copySyncContainerData} buttonLabel="SyncContainerData" label="Dump SyncContainerData" description="Dump SyncContainerData to clipboard. This data includes MANY things about YOU including talent tree, gear, etc." />
-  <!-- https://v2.tauri.app/plugin/file-system/#usage -->
-  <!-- https://v2.tauri.app/plugin/file-system/#scopes -->
   <SettingsButton onclick={async () => await openPath(await path.appLogDir())} buttonLabel="Logs" label="Go to Logs Folder" description="Go to logs folder that contains all the logs for bptimer-auto. Use this file to report any bugs." />
   <SettingsButton onclick={async () => await openPath(await path.join(await path.appDataDir(), 'tauri-plugin-svelte'))} buttonLabel="Settings" label="Go to Settings Folder" description="Go to settings folder that contains all the setting files for bptimer-auto." />
   <SettingsButton onclick={async () => await revealItemInDir(await path.join(await path.appDataDir(), '.window-state.json'))} buttonLabel="Window Memory" label="Go to Window Memory Folder" description="Go to window memory folder that contains the window memory file for bptimer-auto. This file contains the memory of your window positions, etc." />
