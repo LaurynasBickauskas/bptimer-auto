@@ -14,5 +14,3 @@ syncs and reports to https://bptimer.com/
 
 ## Screenshots
 <img width="419" height="271" alt="image" src="https://github.com/user-attachments/assets/13c73ffb-2c2c-4286-bafb-070ef1090f01" />
-
-<img width="438" height="284" alt="image" src="https://github.com/user-attachments/assets/758ad833-a317-4979-83f7-6e690cebd21e" />
